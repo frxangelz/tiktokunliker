@@ -2,7 +2,7 @@
 	TikTok Unliker - Script
 	(c) 2021 - FreeAngel 
 	youtube channel : http://www.youtube.com/channel/UC15iFd0nlfG_tEBrt6Qz1NQ
-	github : 
+	github : https://github.com/frxangelz/tiktokunliker
 */
 
 tick_count = 0;
@@ -10,6 +10,7 @@ cur_url = "test";
 following_page = 'https://www.tiktok.com/';
 
 const _MAX_UNFOLLOW_TO_RELOAD = 40;
+//const _NO_BUTTON_RELOAD_DELAY = 10;
 
 last_click = 0;
 last_call = 0;
@@ -56,6 +57,7 @@ function _unfollow(){
 	}
 	
 	if(last_unlike_url == cur_url){
+
 		console.log("wait for close button....");
 		return true;
 	}
@@ -65,14 +67,22 @@ function _unfollow(){
 	// close btn
 	var cbtn = document.querySelector('button[class*="StyledCloseIconContainer"]');
 	if(!cbtn){
-		console.log("no close button found !");
-		return;
+		cbtn = document.querySelector('img[src*="/images/close"]');
+		if(!cbtn){
+			console.log("no close button found !");
+			no_buttons = true;
+			return;
+		}
 	}
 	
 	var btn = document.querySelector('span[data-e2e="browse-like-icon"]');
 	if(!btn) { 
-		console.log('span[data-e2e="browse-like-icon"] not found !');
-		return false; 
+		btn = document.querySelector('span[class*="icons like"]');
+		if(!btn){
+			console.log('like button not found !');
+			cbtn.click();
+			return false; 
+		}
 	}
 	
 	// unlike it
@@ -100,33 +110,39 @@ function _unfollow(){
 
 /* hanya nama fungsi unfollow, sebenarnya unlike, males ganti-nya :) */
 var tab = null;
-
+var tabClicked = false;
 function unfollow(){
 
-	tab = document.querySelector('span[class*="SpanLiked"]');
+	if(!tab){
+		var spans = document.getElementsByTagName('span');
+		for (var i=0; i<spans.length; i++){
+			if(spans[i].textContent === 'Liked') {
+				tab = spans[i];
+				break;
+			}
+		}
+	}
+
 	if(!tab){
 		console.log("No Liked Tab found !");
 		info("please go to profile page");
 		return;
 	}
-	
-	var section = document.querySelector('div[data-e2e="user-liked-item-list"]');
-	if(!section){
-		console.log("section not found !");
-		tab.click();
-		return;
-	}
-	
-	var items = section.querySelectorAll('div[data-e2e="user-liked-item"]');
+
+	var items = document.querySelectorAll('a[href*="/video/"]');
 	if ((!items) || (items.length < 1)){ 
 	
 		console.log("no Button Found :(");
-		no_buttons = true;
+		if(tabClicked){
+			no_buttons = true;
+		} else {
+			click(tab);
+			tabClicked = true;
+		}
+		
 		return; 
 	}
-	
-	var txt;
-	var a = null;
+
 	for(var i=0; i<items.length; i++){
 
 		txt = items[i].getAttribute("signed");
@@ -134,18 +150,13 @@ function unfollow(){
 
 		items[i].setAttribute("signed","1");
 		// check for link
-		a = items[i].querySelector('a[href*="/video/"]');
-		if(!a){
-			console.log("invalid links");
-			continue;
-		}
-		
-		console.log("items clicked !");
-		a.click();
-		items[i].scrollIntoView();
+		//console.log("items clicked !", items[i].getAttribute('href'));
+		//items[i].click();
+		click(items[i]);
+		items[i].parentNode.scrollIntoView();
 		return;
 	}	
-
+	
 	console.log("No Button :(");
 	// butuh reload, tidak nemu yang dicari :)
 	no_buttons = true;
@@ -247,14 +258,14 @@ chrome.runtime.onMessage.addListener(
 		   
 		   if((config.enable == 1) && (cur_url.indexOf('tiktok.com') !== -1) && (config.total < config.max)){
 
-		   noVideo();
+		   //noVideo();
 		   show_info();
 
 		   // check halaman following
 		   if(check_following_page()){
 			   
 			if(_unfollow()) {
-				if(cur_unfollow >= _MAX_UNFOLLOW_TO_RELOAD){ no_buttons = true; return; }
+				if(cur_unfollow >= _MAX_UNFOLLOW_TO_RELOAD){ no_buttons = true; tick_count = 0; return; }
 				if(config.total >= config.max){ overlimit = true; info("Reached Total Limit : "+config.total); }
 				return;
 			}
@@ -267,8 +278,8 @@ chrome.runtime.onMessage.addListener(
 			   
 			if(no_buttons) {
 
-				var no_button_wait = 30;
-				if(config.fastway) { no_button_wait = 10; }
+				var no_button_wait = 15;
+				if(config.fastway) { no_button_wait = 5; }
 				if(tick_count > no_button_wait){
 			
 					console.log("No Button, Reload");
@@ -320,3 +331,27 @@ chrome.runtime.onMessage.addListener(
 	
 });
 
+var simulateMouseEvent = function(element, eventName, coordX, coordY) {
+	element.dispatchEvent(new MouseEvent(eventName, {
+	  view: window,
+	  bubbles: true,
+	  cancelable: true,
+	  clientX: coordX,
+	  clientY: coordY,
+	  button: 0
+	}));
+  };
+  
+  function click(btn){
+	  var box = btn.getBoundingClientRect(),
+		  coordX = box.left + (box.right - box.left) / 2,
+		  coordY = box.top + (box.bottom - box.top) / 2;
+		  
+	  btn.focus();
+	  simulateMouseEvent(btn,"mousemove",coordX,coordY);
+	  simulateMouseEvent(btn,"mousedown",coordX,coordY);
+	  setTimeout(function(){
+		  simulateMouseEvent(btn,"click",coordX,coordY);
+		  simulateMouseEvent(btn,"mouseup",coordX,coordY);
+	  },200);
+  }
